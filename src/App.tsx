@@ -10,7 +10,6 @@ type RawShape = { nodes: NotionNode[] };
 
 const OVERLAY_PAD = 4000; // generous padding (px) around the stage
 
-
 export default function App() {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -111,7 +110,8 @@ export default function App() {
   // positions / dragging
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
   const [pinned, setPinned]   = useState<Map<string, { x: number; y: number }>>(new Map());
-  const [lockedRoot, setLockedRoot] = useState<{ x: number; y: number } | null>(null);
+  const [velocities, setVelocities] = useState<Map<string, { vx: number; vy: number }>>(new Map());
+  const [simKey, setSimKey] = useState(0);
 
   // helpers
   const getViewport = () => {
@@ -207,11 +207,12 @@ export default function App() {
     sizes,
     positions,
     pinned,
-    locked: lockedRoot ? { [root.id]: lockedRoot } : {},
+    velocities,
     onPositions: setPositions,
     repulsion: -900,
     collidePadding: 8,
     alphaDecay: 0.06,
+    simKey, // add this line
   });
 
   // drag API
@@ -219,12 +220,15 @@ export default function App() {
     setPinned((prev) => new Map(prev).set(id, p));
   const onPinMove = (id: string, p: { x: number; y: number }) =>
     setPinned((prev) => new Map(prev).set(id, p));
-  const onPinEnd = (id: string, p: { x: number; y: number }) => {
+  const onPinEnd = (id: string, p: { x: number; y: number }, v: { vx: number; vy: number }) => {
     setPinned((prev) => {
       const n = new Map(prev); n.delete(id); return n;
     });
     setPositions((prev) => ({ ...prev, [id]: p }));
-    if (root && id === root.id) setLockedRoot(p);
+    setVelocities((prev) => {
+      const n = new Map(prev); n.set(id, v); return n;
+    });
+    setSimKey((k) => k + 1);
   };
 
   return (
@@ -244,8 +248,6 @@ export default function App() {
         className="stage"
         style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`, transformOrigin: "0 0" }}
       >
-
-
         <svg
           className="overlay"
           style={{
