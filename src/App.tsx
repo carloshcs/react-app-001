@@ -6,14 +6,17 @@ import { NodeItem } from "./components/NodeItem";
 import { sizeForDepth, ROOT_RING_RADIUS } from "./config/layout";
 import { useD3Force } from "./physics/useD3Force";
 
+// NEW: import the left menu
+import { LeftMenu } from "./left-menu/LeftMenu";
+
 type RawShape = { nodes: NotionNode[] };
 
-const OVERLAY_PAD = 4000; // generous padding (px) around the stage
+const OVERLAY_PAD = 4000;
 
 export default function App() {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // ------- zoom + pan on the stage -------
+  // zoom + pan
   const [scale, setScale] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -36,16 +39,24 @@ export default function App() {
       zoomAt(e.deltaY > 0 ? 0.9 : 1.1, e.clientX, e.clientY);
     }
   };
+
   const beginPan: React.MouseEventHandler<HTMLDivElement> = (e) => {
-    // ignore drags that start on a node
+    // do not start panning if starting over a node OR over the left menu or its hotzone
     const target = e.target as HTMLElement;
     if (target.closest(".node-ball")) return;
+    if (target.closest(".left-menu")) return;
+    if (target.closest(".left-menu-hotzone")) return;
+
     setIsPanning(true);
     panStart.current = { ...pan };
     pointerStart.current = { x: e.clientX, y: e.clientY };
+
     const move = (ev: MouseEvent) =>
-      setPan({ x: panStart.current.x + (ev.clientX - pointerStart.current.x),
-               y: panStart.current.y + (ev.clientY - pointerStart.current.y) });
+      setPan({
+        x: panStart.current.x + (ev.clientX - pointerStart.current.x),
+        y: panStart.current.y + (ev.clientY - pointerStart.current.y),
+      });
+
     const up = () => {
       setIsPanning(false);
       window.removeEventListener("mousemove", move);
@@ -55,12 +66,12 @@ export default function App() {
     window.addEventListener("mouseup", up);
   };
 
-  // ------- data -------
+  // data
   const data = (rawData as RawShape).nodes;
   const { byId, children, roots } = useMemo(() => parse(data), [data]);
   const root = roots[0];
 
-  // depths (root=0)
+  // depths
   const depths = useMemo(() => {
     const d = new Map<string, number>();
     const q: string[] = [];
@@ -75,7 +86,7 @@ export default function App() {
     return d;
   }, [root, children]);
 
-  // expand/collapse
+  // expand and collapse
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggle = (id: string) =>
     setExpanded((prev) => {
@@ -84,21 +95,32 @@ export default function App() {
       return n;
     });
 
-  // visible nodes: root + level-2 always; deeper if parent expanded
-  const level2 = useMemo(() => (root ? children.get(root.id) || [] : []), [children, root]);
+  // initial open for root, can be closed later
+  const rootInitDone = useRef(false);
+  useEffect(() => {
+    if (!root || rootInitDone.current) return;
+    setExpanded(prev => {
+      const n = new Set(prev);
+      n.add(root.id);
+      return n;
+    });
+    rootInitDone.current = true;
+  }, [root]);
+
+  // visible set is driven by expanded state
   const visibleIds = useMemo(() => {
     if (!root) return [];
-    const vis = new Set<string>([root.id, ...level2.map((n) => n.id)]);
-    const q = [root.id, ...level2.map((n) => n.id)];
+    const vis = new Set<string>([root.id]);
+    const q = [root.id];
     while (q.length) {
       const id = q.shift()!;
       if (!expanded.has(id)) continue;
-      (children.get(id) || []).forEach((ch) => {
+      (children.get(id) || []).forEach(ch => {
         if (!vis.has(ch.id)) { vis.add(ch.id); q.push(ch.id); }
       });
     }
     return Array.from(vis);
-  }, [root, level2, children, expanded]);
+  }, [root, children, expanded]);
 
   // sizes
   const sizes = useMemo(() => {
@@ -107,52 +129,45 @@ export default function App() {
     return m;
   }, [visibleIds, depths]);
 
-  // positions / dragging
+  // positions and dragging
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
   const [pinned, setPinned]   = useState<Map<string, { x: number; y: number }>>(new Map());
   const [velocities, setVelocities] = useState<Map<string, { vx: number; vy: number }>>(new Map());
   const [simKey, setSimKey] = useState(0);
 
-  // helpers
   const getViewport = () => {
     const r = containerRef.current?.getBoundingClientRect();
     const w = r?.width ?? window.innerWidth, h = r?.height ?? window.innerHeight;
     return { cx: w / 2, cy: h / 2 };
   };
-  const getCenter = (id: string) => {
-    const s = sizes[id] ?? 80;
-    const p = positions[id];
-    if (!p) {
-      const { cx, cy } = getViewport();
-      return { x: cx, y: cy };
-    }
-    return { x: p.x + s / 2, y: p.y + s / 2 };
-  };
 
-  // initial seed: root at true centre; level-2 evenly around ring
   useEffect(() => {
     if (!root) return;
     const { cx, cy } = getViewport();
+    const rootSize = sizes[root.id] ?? 100;
+
     setPositions((prev) => {
       const next = { ...prev };
-      const rSize = sizes[root.id] ?? 100;
-      next[root.id] = { x: cx - rSize / 2, y: cy - rSize / 2 };
+      next[root.id] = { x: cx - rootSize / 2, y: cy - rootSize / 2 };
 
-      const n = Math.max(1, level2.length);
-      for (let i = 0; i < n; i++) {
-        const ch = level2[i];
-        const s = sizes[ch.id] ?? 80;
-        const a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
-        const x = cx + Math.cos(a) * ROOT_RING_RADIUS - s / 2;
-        const y = cy + Math.sin(a) * ROOT_RING_RADIUS - s / 2;
-        if (!next[ch.id]) next[ch.id] = { x, y };
+      if (expanded.has(root.id)) {
+        const kids = children.get(root.id) || [];
+        const n = Math.max(1, kids.length);
+        for (let i = 0; i < n; i++) {
+          const ch = kids[i];
+          const s = sizes[ch.id] ?? 80;
+          const a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+          const x = cx + Math.cos(a) * ROOT_RING_RADIUS - s / 2;
+          const y = cy + Math.sin(a) * ROOT_RING_RADIUS - s / 2;
+          if (!next[ch.id]) next[ch.id] = { x, y };
+        }
       }
+
       return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [root, level2]);
+  }, [root, children, expanded, sizes]);
 
-  // seed newly visible children close to parent (tiny ring)
   useEffect(() => {
     setPositions((prev) => {
       const next = { ...prev };
@@ -179,14 +194,15 @@ export default function App() {
     });
   }, [visibleIds, expanded, sizes, children]);
 
-  // links (springs)
   const links = useMemo(() => {
     if (!root) return [] as { source: string; target: string; distance: number; strength?: number }[];
     const L: { source: string; target: string; distance: number; strength?: number }[] = [];
+
     (children.get(root.id) || []).forEach((ch) => {
       if (!visibleIds.includes(ch.id)) return;
       L.push({ source: root.id, target: ch.id, distance: 120, strength: 0.09 });
     });
+
     visibleIds.forEach((pid) => {
       if (!expanded.has(pid)) return;
       const dChild = (depths.get(pid) ?? 0) + 1;
@@ -199,7 +215,6 @@ export default function App() {
     return L;
   }, [root, children, visibleIds, expanded, depths]);
 
-  // physics (centered on viewport; no knowledge of pan/scale needed)
   useD3Force({
     containerRef,
     nodes: visibleIds,
@@ -212,10 +227,9 @@ export default function App() {
     repulsion: -900,
     collidePadding: 8,
     alphaDecay: 0.06,
-    simKey, // add this line
+    simKey,
   });
 
-  // drag API
   const onPinStart = (id: string, p: { x: number; y: number }) =>
     setPinned((prev) => new Map(prev).set(id, p));
   const onPinMove = (id: string, p: { x: number; y: number }) =>
@@ -237,13 +251,19 @@ export default function App() {
       ref={containerRef}
       onWheel={onWheel}
       onMouseDown={beginPan}
+      style={{ position: "relative" }}
     >
+      {/* Zoom controls */}
       <div className="zoom-toolbar">
         <button onClick={() => zoomAt(1.1, window.innerWidth / 2, window.innerHeight / 2)}>+</button>
         <span>{Math.round(scale * 100)}%</span>
         <button onClick={() => zoomAt(1 / 1.1, window.innerWidth / 2, window.innerHeight / 2)}>–</button>
       </div>
 
+      {/* Left hover menu */}
+      <LeftMenu />
+
+      {/* Graph stage */}
       <div
         className="stage"
         style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`, transformOrigin: "0 0" }}
@@ -280,7 +300,7 @@ export default function App() {
             );
           })}
         </svg>
-        
+
         {visibleIds.map((id) => {
           const node = byId.get(id)!;
           const pos  = positions[id] ?? { x: 0, y: 0 };
