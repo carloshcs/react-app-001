@@ -6,6 +6,7 @@ type SizeMap = Record<string, number>;
 type PosMap = Record<string, Vec>;
 type Link = { source: string; target: string; distance: number; strength?: number };
 
+
 export function useD3Force(opts: {
   containerRef: React.MutableRefObject<HTMLDivElement | null>;
   nodes: string[];
@@ -107,4 +108,6 @@ export function useD3Force(opts: {
     simKey,
     JSON.stringify(Array.from(velocities.entries())),
   ]);
+
+  
 }

@@ -1,3 +1,8 @@
+
+
+
+
+
 .container {
   position: relative;
   width: 100vw;
@@ -43,3 +48,15 @@
   background: #fafafa; cursor: pointer;
 }
 .zoom-toolbar span { min-width: 44px; text-align: center; font: 500 12px/1 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+
+:root {
+  --font-sans: "Inter Variable", "Inter var", Inter, system-ui, -apple-system,
+               "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+html, body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
