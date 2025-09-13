@@ -1,4 +1,5 @@
 import React from "react";
+import { fitTitleToCircle } from "../../utils/text";
 
 export interface NodeBallProps {
   id: string;
@@ -21,64 +22,6 @@ export interface NodeBallProps {
   labelColor: string;
 }
 
-type FitResult = { lines: string[]; fontSize: number };
-
-/**
- * Fit a title inside a circle (diameter px), wrapping to at most maxLines.
- * Uses a simple character-per-pixel heuristic to avoid measuring DOM text.
- */
-function fitTitleToCircle(title: string, diameter: number, maxLines = 3): FitResult {
-  const clean = (title || "").trim();
-  if (!clean) return { lines: [""], fontSize: Math.max(12, Math.min(18, diameter * 0.18)) };
-
-  // target font size proportional to diameter; clamped
-  let fontSize = Math.max(12, Math.min(20, diameter * 0.18));
-
-  // available text width inside the circle (leave padding)
-  const pad = Math.max(6, diameter * 0.11);
-  const usable = Math.max(10, diameter - pad * 2);
-
-  // average character width ≈ 0.54 * fontSize for semi-bold Inter/Segoe/etc.
-  const avgCharW = 0.54 * fontSize;
-  const maxCharsPerLine = Math.max(6, Math.floor(usable / avgCharW));
-
-  const words = clean.split(/\s+/);
-  const lines: string[] = [];
-  let cur = "";
-
-  for (const w of words) {
-    const addLen = cur ? cur.length + 1 + w.length : w.length;
-    if (addLen <= maxCharsPerLine) {
-      cur = cur ? cur + " " + w : w;
-    } else {
-      if (cur) lines.push(cur);
-      cur = w;
-      if (lines.length === maxLines - 1) break; // last line reserved
-    }
-  }
-  if (lines.length < maxLines && cur) lines.push(cur);
-
-  // If we still overflow in characters overall, truncate last line with ellipsis
-  const joined = words.join(" ");
-  if (lines.length === maxLines && joined.length > lines.join(" ").length) {
-    const last = lines[lines.length - 1];
-    if (last.length > 1) {
-      const room = Math.max(0, maxCharsPerLine - 1);
-      lines[lines.length - 1] = last.slice(0, room).trimEnd() + "…";
-    }
-  }
-
-  // If we generated only one very long word (no spaces) that still doesn't fit,
-  // reduce font size slightly and try once more (rare for “Supercalifragilistic…” cases)
-  if (lines.length === 1 && lines[0].length > maxCharsPerLine + 2) {
-    fontSize = Math.max(11, fontSize * 0.92);
-    const retry = fitTitleToCircle(clean, diameter, maxLines);
-    return { lines: retry.lines, fontSize: Math.min(retry.fontSize, fontSize) };
-  }
-
-  return { lines, fontSize };
-}
-
 export const NodeBall: React.FC<NodeBallProps> = ({
   title,
   x,
@@ -94,9 +37,9 @@ export const NodeBall: React.FC<NodeBallProps> = ({
   stroke,
   labelColor,
 }) => {
-  const fit = fitTitleToCircle(title, size, 3);
-  const lineHeight = fit.fontSize * 1.12;
-  const totalTextH = fit.lines.length * lineHeight;
+  const fit = fitTitleToCircle(title, size); // shared, deterministic
+  const { lines, fontSize, lineHeight } = fit;
+  const totalTextH = lines.length * lineHeight;
   const firstBaselineY = size / 2 - totalTextH / 2 + lineHeight / 2;
 
   return (
@@ -165,14 +108,14 @@ export const NodeBall: React.FC<NodeBallProps> = ({
           style={{ fontKerning: "normal" as any, fontVariationSettings: "'wght' 600" }}
           fill={labelColor}
         >
-          {fit.lines.map((ln, i) => (
+          {lines.map((ln, i) => (
             <text
               key={i}
               x="50%"
               y={firstBaselineY + i * lineHeight}
               dominantBaseline="middle"
               textAnchor="middle"
-              style={{ fontSize: fit.fontSize, letterSpacing: 0.1 }}
+              style={{ fontSize, letterSpacing: 0.1 }}
             >
               {ln}
             </text>

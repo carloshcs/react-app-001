@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import rawData from "./notion_data.json";
+//import rawData from "./notion_data.json";
 import { parse } from "./data/parse";
 import { sizeForDepth } from "./config/layout";
 
@@ -11,10 +11,21 @@ import { ZOOM_STEP, clampScale } from "./config/zoom";
 /* Mind Map 1 bundle (engine + node + force) */
 import { mindMap1 } from "./maps-type/mind-map-1/engine";
 import { NodeItem } from "./maps-type/mind-map-1/NodeItem";
-import { useD3Force } from "./maps-type/mind-map-1/useD3Force";
+import { useMindMap1Force as useD3Force } from "./maps-type/mind-map-1/useD3Force";
 
 /* Left Menu */
 import { LeftMenu } from "./left-menu/LeftMenu";
+
+// Get data
+import { loadData } from "./data/loadData";
+
+export default function App() {
+  const { nodes, links } = loadData();
+
+  // ... keep rest of your code the same
+}
+
+
 
 /* ---------- Local types ---------- */
 export interface NotionGraphNode {
@@ -297,14 +308,6 @@ export default function App() {
     pinned,
     velocities,
     onPositions: setPositions,
-
-    repulsion: mindMap1.force.repulsion,
-    velocityDecay: mindMap1.force.velocityDecay,
-    alphaDecay: mindMap1.force.alphaDecay,
-    alphaTarget: mindMap1.force.alphaTarget,
-    centerStrength: mindMap1.force.centerStrength,
-    collidePadding: mindMap1.force.collidePadding,
-
     simKey,
   });
 

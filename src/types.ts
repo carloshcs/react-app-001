@@ -1,11 +1,13 @@
 // Global, shared types for the app
+// export interface NotionGraphNode {
+export interface NotionNode {
 
-export interface NotionGraphNode {
   id: string;
   title?: string;
   name?: string;
   url?: string;
   kind?: string | null;
+  parent_id?: string | null;
 }
 
 export type Vec = { x: number; y: number };
