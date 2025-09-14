@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-//import rawData from "./notion_data.json";
+import rawData from "./notion_data.json";
 import { parse } from "./data/parse";
 import { sizeForDepth } from "./config/layout";
 
@@ -15,17 +15,6 @@ import { useMindMap1Force as useD3Force } from "./maps-type/mind-map-1/useD3Forc
 
 /* Left Menu */
 import { LeftMenu } from "./left-menu/LeftMenu";
-
-// Get data
-import { loadData } from "./data/loadData";
-
-export default function App() {
-  const { nodes, links } = loadData();
-
-  // ... keep rest of your code the same
-}
-
-
 
 /* ---------- Local types ---------- */
 export interface NotionGraphNode {
